@@ -2,24 +2,12 @@ const Post = require("../models/post.model");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const User = require("../models/user.model");
-
+const mongoose = require('mongoose');
 // Multer Storage Setup (Memory me rakho ya Disk pe save karo)
 const storage = multer.memoryStorage(); // Or use diskStorage for local files
 const upload = multer({ storage });
 
-// // Middleware to verify token
-// const verifyToken = (req, res, next) => {
-//   const token = req.header("Authorization");
-//   if (!token) return res.status(401).json({ message: "Access Denied" });
 
-//   try {
-//     const verified = jwt.verify(token, process.env.JWT_SECRET);
-//     req.user = verified;
-//     next();
-//   } catch (err) {
-//     res.status(400).json({ message: "Invalid Token" });
-//   }
-// };
 
 const getAllPosts = async (req, res) => {
   try {
@@ -65,7 +53,7 @@ const createPost = async (req, res) => {
       image: imageBase64,
       caption,
     });
-    console.log(newPost);
+    // console.log(newPost);
 
     const savedPost = await newPost.save();
 
@@ -117,42 +105,103 @@ const deletePost = async (req, res) => {
   }
 };
 
+// const likePost = async (req, res) => {
+//   const { postId } = req.params;
+//   const { userId } = req.body;
+// console.log(req.body);
+//   try {
+//     // Check if post exists
+//     const post = await Post.findById(postId);
+//     if (!post) {
+//       return res.status(404).json({ message: "Post not found" });
+//     }
+
+//     // Check if user exists
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // Check if user already liked the post
+//     const hasLiked = post.likes.includes(userId);
+//     console.log(hasLiked);
+
+//     if (hasLiked) {
+//       // Unlike the post
+//       post.likes = post.likes.filter((id) => id.toString() !== userId);
+//       post.likeCount -= 1;
+//     } else {
+//       // Like the post
+//       post.likes.push(userId);
+//       post.likeCount += 1;
+//     }
+
+//     // Save the updated post
+//     const updatedPost = await post.save();
+//     console.log(updatedPost);
+
+//     // Populate the likes to get user details
+//     const populatedPost = await Post.findById(updatedPost._id).populate(
+//       "likes",
+//       "username profilePic"
+//     );
+
+//     res.status(200).json({
+//       message: hasLiked ? "Post unliked" : "Post liked",
+//       post: populatedPost,
+//     });
+//   } catch (error) {
+//     console.error("Error liking post:", error);
+//     res.status(500).json({ message: "Internal server error", error });
+//   }
+// };
+
+
+
+
 const likePost = async (req, res) => {
   const { postId } = req.params;
-  const { userId } = req.body;
-console.log(req.body);
+  let { userId } = req.body;
+
+  // console.log("Request Body:", req.body); 
+
   try {
-    // Check if post exists
+    // Validate userId format
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid User ID" });
+    }
+    
+    // Convert userId to ObjectId
+    userId = new mongoose.Types.ObjectId(userId);
+
+
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check if user already liked the post
-    const hasLiked = post.likes.includes(userId);
-    console.log(hasLiked);
+    const hasLiked = post.likes.some((id) => id.toString() === userId.toString());
 
     if (hasLiked) {
-      // Unlike the post
-      post.likes = post.likes.filter((id) => id.toString() !== userId);
-      post.likeCount -= 1;
+     
+      post.likes = post.likes.filter((id) => id.toString() !== userId.toString());
+      post.likeCount = Math.max(0, post.likeCount - 1); 
     } else {
-      // Like the post
+      
       post.likes.push(userId);
       post.likeCount += 1;
     }
 
-    // Save the updated post
+    
     const updatedPost = await post.save();
-    console.log(updatedPost);
+    
 
-    // Populate the likes to get user details
+  
     const populatedPost = await Post.findById(updatedPost._id).populate(
       "likes",
       "username profilePic"
@@ -170,31 +219,37 @@ console.log(req.body);
 
 const getAllLikes = async (req, res) => {
   const { postId } = req.params;
-  console.log(postId);
 
   try {
-    // Find the post and populate the likes with user details
+    // Find the post and populate the likes with more user details
     const post = await Post.findById(postId).populate(
       "likes",
-      "username profilePic"
+      "username profilePic " // Add extra fields if needed
     );
+
+
     if (!post) {
       return res
         .status(404)
         .json({ success: false, message: "Post not found" });
     }
 
-    // Return the list of users who liked the post
+    // Returning a structured response
     res.status(200).json({
       success: true,
       likesCount: post.likes.length,
-      likes: post.likes,
+      likedBy: post.likes.map((user) => ({
+        userId: user._id,
+        username: user.username,
+        profilePic: user.profilePic,
+      })),
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching likes:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 const getPost = async (req, res) => {
   const { postId } = req.params;
@@ -209,7 +264,6 @@ const getPost = async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
-    console.log("post data:",post);
     // Send the found post
     res.status(200).json({ success: true, data: post });
   } catch (error) {

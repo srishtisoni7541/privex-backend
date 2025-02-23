@@ -15,7 +15,7 @@ router.get("/allposts", getAllPosts);
 router.post("/create", isLoggedIn, upload.single("image"), createPost);
 router.post('/like/:postId',isLoggedIn,likePost);
 // router.get('/post/:postId',getPost);
-router.post('/allLikes',getAllLikes);
+router.get('/allLikes/:postId',getAllLikes);
 
 // Update a post (Protected route)
 router.put("/update/:postId", isLoggedIn, updatePost);
