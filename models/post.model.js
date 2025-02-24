@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const postSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Post Owner
-  image: { type: String, required: true }, // Post Image URL
+  image: { type: Buffer, required: true }, // Post Image URL
   caption: { type: String, maxlength: 500 }, // Caption
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Liked Users
   comments: [

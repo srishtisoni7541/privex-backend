@@ -9,16 +9,44 @@ const upload = multer({ storage });
 
 
 
+// const getAllPosts = async (req, res) => {
+//   try {
+//     const allPosts = await Post.find()
+//       .populate("user", "username profilePic")
+//       .sort({ createdAt: -1 }); // Latest posts pehle aayenge
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "All posts fetched successfully",
+//       posts: allPosts,
+//     });
+//   } catch (err) {
+//     console.error("Error fetching posts:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Something went wrong while fetching posts",
+//     });
+//   }
+// };
+
+
+
 const getAllPosts = async (req, res) => {
   try {
     const allPosts = await Post.find()
       .populate("user", "username profilePic")
       .sort({ createdAt: -1 }); // Latest posts pehle aayenge
 
+    // Convert buffer to Base64
+    const formattedPosts = allPosts.map((post) => ({
+      ...post._doc,
+      image: post.image ? post.image.toString("base64") : null, // Buffer to Base64 conversion
+    }));
+
     return res.status(200).json({
       success: true,
       message: "All posts fetched successfully",
-      posts: allPosts,
+      posts: formattedPosts,
     });
   } catch (err) {
     console.error("Error fetching posts:", err);
@@ -28,6 +56,7 @@ const getAllPosts = async (req, res) => {
     });
   }
 };
+
 
 const createPost = async (req, res) => {
   try {
@@ -40,7 +69,7 @@ const createPost = async (req, res) => {
     }
 
     // Convert Image Buffer to Base64
-    const imageBase64 = req.file.buffer.toString("base64");
+    const imageBase64 = req.file.buffer;
 
     // Ensure user ID exists
     if (!req.user || !req.user.userId) {
