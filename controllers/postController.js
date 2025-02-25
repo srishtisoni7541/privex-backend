@@ -30,18 +30,18 @@ const upload = multer({ storage });
 // };
 
 
-
 const getAllPosts = async (req, res) => {
   try {
     const allPosts = await Post.find()
       .populate("user", "username profilePic")
       .sort({ createdAt: -1 }); // Latest posts pehle aayenge
-
-    // Convert buffer to Base64
-    const formattedPosts = allPosts.map((post) => ({
-      ...post._doc,
-      image: post.image ? post.image.toString("base64") : null, // Buffer to Base64 conversion
-    }));
+    const formattedPosts = allPosts.map((post) => {
+      const mimeType = post.imageType || "image/jpeg"; // ✅ Ab `post` available hai
+      return {
+        ...post._doc,
+        image: post.image ? `data:${mimeType};base64,${post.image.toString("base64")}` : null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -56,6 +56,7 @@ const getAllPosts = async (req, res) => {
     });
   }
 };
+
 
 
 const createPost = async (req, res) => {

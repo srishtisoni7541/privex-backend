@@ -79,11 +79,7 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const { username, bio } = req.body;
-    const profilePic =  req.file.buffer; // Image ko buffer me save kar raha hai
-  
-
-
-    // console.log("Received Data:", { username, bio, profilePic });
+    const profilePic =  req.file.buffer; // Image ko buffer me save kar raha ha
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.userId, // ✅ Ensure correct user ID
