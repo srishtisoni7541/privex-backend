@@ -137,40 +137,37 @@ const deletePost = async (req, res) => {
 
 // const likePost = async (req, res) => {
 //   const { postId } = req.params;
-//   const { userId } = req.body;
-// console.log(req.body);
+//   let { userId } = req.body;
+
 //   try {
-//     // Check if post exists
+//     if (!mongoose.Types.ObjectId.isValid(userId)) {
+//       return res.status(400).json({ message: "Invalid User ID" });
+//     }
+    
+//     userId = new mongoose.Types.ObjectId(userId);
+
 //     const post = await Post.findById(postId);
 //     if (!post) {
 //       return res.status(404).json({ message: "Post not found" });
 //     }
 
-//     // Check if user exists
 //     const user = await User.findById(userId);
 //     if (!user) {
 //       return res.status(404).json({ message: "User not found" });
 //     }
 
-//     // Check if user already liked the post
 //     const hasLiked = post.likes.includes(userId);
-//     console.log(hasLiked);
 
 //     if (hasLiked) {
-//       // Unlike the post
-//       post.likes = post.likes.filter((id) => id.toString() !== userId);
-//       post.likeCount -= 1;
+//       post.likes = post.likes.filter(id => id.toString() !== userId.toString());
+//       post.likeCount = Math.max(0, post.likeCount - 1);
 //     } else {
-//       // Like the post
-//       post.likes.push(userId);
+//       post.likes = [...post.likes, userId]; // Ensure array is correctly updated
 //       post.likeCount += 1;
 //     }
 
-//     // Save the updated post
 //     const updatedPost = await post.save();
-//     console.log(updatedPost);
 
-//     // Populate the likes to get user details
 //     const populatedPost = await Post.findById(updatedPost._id).populate(
 //       "likes",
 //       "username profilePic"
@@ -185,67 +182,64 @@ const deletePost = async (req, res) => {
 //     res.status(500).json({ message: "Internal server error", error });
 //   }
 // };
-
-
-
-
 const likePost = async (req, res) => {
   const { postId } = req.params;
-  let { userId } = req.body;
-
-  // console.log("Request Body:", req.body); 
+  let userId = req.body.userId || req.user?._id; // ✅ Authentication ka dhyan rakho
 
   try {
-    // Validate userId format
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: "Invalid User ID" });
+    console.log("Received userId:", userId);
+
+    // ✅ User aur Post ID validate karo
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ message: "Invalid User ID or Post ID" });
     }
-    
-    // Convert userId to ObjectId
+
     userId = new mongoose.Types.ObjectId(userId);
 
+    // ✅ User ka actual data fetch karo
+    const currentUser = await User.findById(userId).select("username profilePic");
+    console.log("Fetched User:", currentUser);
+
+    if (!currentUser) return res.status(404).json({ message: "User not found" });
 
     const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found" });
-    }
+    if (!post) return res.status(404).json({ message: "Post not found" });
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    console.log("Before Like Update:", post.likes); // Debugging ke liye
 
-    const hasLiked = post.likes.some((id) => id.toString() === userId.toString());
+    // ✅ Check if user already liked the post
+    const alreadyLikedIndex = post.likes.findIndex(like => like._id.toString() === userId.toString());
 
-    if (hasLiked) {
-     
-      post.likes = post.likes.filter((id) => id.toString() !== userId.toString());
-      post.likeCount = Math.max(0, post.likeCount - 1); 
+    if (alreadyLikedIndex !== -1) {
+      // ❌ Agar user pehle se like kar chuka hai to sirf uska like remove karo
+      post.likes.splice(alreadyLikedIndex, 1);
     } else {
-      
-      post.likes.push(userId);
-      post.likeCount += 1;
+      // ✅ Naye user ka like push karo
+      post.likes.push({ 
+        _id: userId, 
+        username: currentUser.username, 
+        profilePic: currentUser.profilePic 
+      });
     }
 
-    
-    const updatedPost = await post.save();
-    
+    // ✅ Save changes
+    await post.save();
 
-  
-    const populatedPost = await Post.findById(updatedPost._id).populate(
-      "likes",
-      "username profilePic"
-    );
+    console.log("After Like Update:", post.likes); // Debugging ke liye
 
-    res.status(200).json({
-      message: hasLiked ? "Post unliked" : "Post liked",
-      post: populatedPost,
-    });
+    res.json({ message: alreadyLikedIndex !== -1 ? "Post unliked" : "Post liked", likes: post.likes });
+
   } catch (error) {
     console.error("Error liking post:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
+
+
+
+
+
 
 const getAllLikes = async (req, res) => {
   const { postId } = req.params;
@@ -257,6 +251,7 @@ const getAllLikes = async (req, res) => {
       "username profilePic " // Add extra fields if needed
     );
 
+    console.log("liked posts:",post);
 
     if (!post) {
       return res

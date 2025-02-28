@@ -5,6 +5,7 @@ const postSchema = new mongoose.Schema({
   image: { type: Buffer, required: true }, // Post Image URL
   caption: { type: String, maxlength: 500 }, // Caption
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Liked Users
+  likeCount:{type:Number},
   comments: [
     {
       user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Commenter
