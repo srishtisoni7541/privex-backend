@@ -11,6 +11,7 @@ const getAllPosts = async (req, res) => {
     
     //  Redis Check: Cache me data hai kya?
     const cachedData = await redisClient.get(cacheKey);
+    console.log(cachedData);
     if (cachedData) {
       console.log("🔵 Serving from Cache");
       return res.status(200).json({
@@ -51,6 +52,56 @@ const getAllPosts = async (req, res) => {
 
 
 
+// const createPost = async (req, res) => {
+//   try {
+//     const { caption } = req.body;
+
+//     if (!req.file || !caption) {
+//       return res.status(400).json({ message: "Caption and image are required" });
+//     }
+
+//     if (!req.user || !req.user.userId) {
+//       return res.status(401).json({ message: "User authentication failed" });
+//     }
+
+//     // ✅ Cloudinary URL from Multer
+//     const imageUrl = req.file.path;
+
+//     // ✅ Post create
+//     const newPost = new Post({
+//       user: req.user.userId,
+//       image: imageUrl,
+//       caption,
+//     });
+
+//     const savedPost = await newPost.save();
+
+//     // ✅ User model me bhi update karo
+//     const updatedUser = await User.findByIdAndUpdate(
+//       req.user.userId,
+//       { $push: { posts: savedPost._id } },
+//       { new: true } // Yeh ensure karega ki updated user return ho
+//     ).populate("posts"); // Taaki updated posts array mile
+
+//     // ✅ Redis cache update karo
+//     const cacheKey = `userProfile:${req.user.userId}`;
+//     await redisClient.set(cacheKey, JSON.stringify(updatedUser), 'EX', 3600);
+
+
+//     // ✅ Saare posts ka cache bhi delete karo taaki fresh list aaye
+//     await redisClient.del("allPosts");
+
+//     res.status(201).json(savedPost);
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
+//   }
+// };
+
+
+
+
+
 
 const createPost = async (req, res) => {
   try {
@@ -64,32 +115,38 @@ const createPost = async (req, res) => {
       return res.status(401).json({ message: "User authentication failed" });
     }
 
-    // ✅ Since Multer-Cloudinary auto uploads, get image URL from req.file.path
+    // ✅ Cloudinary URL from Multer
     const imageUrl = req.file.path;
 
-    // Save post with Cloudinary URL instead of binary data
+    // ✅ Post create
     const newPost = new Post({
       user: req.user.userId,
-      image: imageUrl, // Cloudinary URL
+      image: imageUrl,
       caption,
     });
 
-
     const savedPost = await newPost.save();
-    await User.findByIdAndUpdate(req.user.userId, {
-      $push: { posts: savedPost._id },
-    });
 
-    // Invalidate cache
+    // ✅ User model update
+    await User.findByIdAndUpdate(
+      req.user.userId,
+      { $push: { posts: savedPost._id } },
+      { new: true }
+    );
+
+    // ✅ Redis cache DELETE karo taaki next time fresh data aaye
+    const cacheKey = `user:${req.user.userId}`;
+    await redisClient.del(cacheKey);
+
+    // ✅ Saare posts ka cache bhi delete karo taaki fresh list aaye
     await redisClient.del("allPosts");
 
     res.status(201).json(savedPost);
   } catch (err) {
-    console.log(err);
+    console.log("❌ Error in createPost:", err);
     res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
   }
 };
-
 
 
 
@@ -113,22 +170,35 @@ const updatePost = async (req, res) => {
   }
 };
 
-// Delete a post
+
+
+
 const deletePost = async (req, res) => {
   try {
-    const { id } = req.params;
-    const post = await Post.findById(id);
+    console.log("Request Params:", req.params);
+    const { postId } = req.params; // 🛠️ Fix: `postId` lo, `id` nahi
+    
+    // console.log("Received Post ID for deletion:", postId);
 
+    if (!postId) return res.status(400).json({ message: "Post ID not provided" });
+
+    const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
-    if (post.userId.toString() !== req.user.id)
-      return res.status(403).json({ message: "Unauthorized" });
 
-    await Post.findByIdAndDelete(id);
+    // 🛠️ Post delete from MongoDB
+    await Post.findByIdAndDelete(postId);
+
+    // 🛠️ Redis se bhi delete karo
+    const cacheKey = `post:${postId}`;
+    await redisClient.del(cacheKey);
+
     res.status(200).json({ message: "Post deleted successfully" });
   } catch (err) {
+    console.error("Error in deletePost:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 const likePost = async (req, res) => {

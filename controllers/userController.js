@@ -4,8 +4,8 @@
 const User = require("../models/user.model");
 const Post = require("../models/post.model");
 const redisClient = require("../services/redisClient");
+const mongoose = require('mongoose');
 
-// ✅ Follow/Unfollow User
 exports.followUser = async (req, res) => {
   try {
     const { userId } = req.params; // Jisko follow karna hai
@@ -25,74 +25,58 @@ exports.followUser = async (req, res) => {
     if (isFollowing) {
       await User.findByIdAndUpdate(loggedInUserId, { $pull: { following: userId } });
       await User.findByIdAndUpdate(userId, { $pull: { followers: loggedInUserId } });
-      await redisClient.del(`user:${loggedInUserId}`); // ✅ Cache Invalidation
-      await redisClient.del(`user:${userId}`);
-      return res.json({ success: true, message: "User unfollowed!" });
     } else {
       await User.findByIdAndUpdate(loggedInUserId, { $push: { following: userId } });
       await User.findByIdAndUpdate(userId, { $push: { followers: loggedInUserId } });
-      await redisClient.del(`user:${loggedInUserId}`); // ✅ Cache Invalidation
-      await redisClient.del(`user:${userId}`);
-      return res.json({ success: true, message: "User followed!" });
     }
+
+    // ✅ Cache Invalidate + Update
+    await redisClient.del(`user:${loggedInUserId}`);
+    await redisClient.del(`user:${userId}`);
+
+    const updatedUser1 = await User.findById(loggedInUserId).populate("posts").lean();
+    const updatedUser2 = await User.findById(userId).populate("posts").lean();
+
+    await redisClient.set(`user:${loggedInUserId}`, JSON.stringify(updatedUser1), 'EX', 3600);
+    await redisClient.set(`user:${userId}`, JSON.stringify(updatedUser2), 'EX', 3600);
+
+    return res.json({ success: true, message: isFollowing ? "User unfollowed!" : "User followed!" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Internal Server Error!" });
   }
 };
 
-// // ✅ Get User Profile with Redis Cache
-// exports.getUserProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.userId;
-    
-//     // ✅ Pehle Redis se check karo
-//     const cachedData = await redisClient.get(`user:${userId}`);
-//     if (cachedData) {
-//       return res.json(JSON.parse(cachedData));
-//     }
-
-//     const user = await User.findById(userId).populate("posts");
-//     if (!user) return res.status(404).json({ error: "User not found" });
-
-//     const responseData = {
-//       _id: user._id,
-//       username: user.username,
-//       profilePic: user.profilePic,
-//       bio: user.bio,
-//       posts: user.posts,
-//       liked: user.liked,
-//       stats: {
-//         posts: user.posts.length,
-//         followers: user.followers.length,
-//         following: user.following.length,
-//       },
-//     };
-
-//     console.log("sended data:",responseData);
-//     // ✅ Data Redis me store karo (60 min ke liye)
-//     await redisClient.set(`user:${userId}`, JSON.stringify(responseData),'EX',3600, );
-
-//     res.json(responseData);
-//   } catch (error) {
-//     console.log(error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// };
 
 
 exports.getUserProfile = async (req, res) => {
   try {
+    console.log("req.user:", req.user); // ✅ Debugging ke liye
+
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: "Unauthorized: User ID missing" });
+    }
+
     const userId = req.user.userId;
-    
-    // ✅ Pehle Redis se check karo
-    const cachedData = await redisClient.get(`user:${userId}`);
+    console.log("User ID:", userId);
+
+    // ✅ Ensure valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: "Invalid User ID" });
+    }
+
+    // ✅ Redis Cache Check
+    const cacheKey = `user:${userId}`;
+    console.log("Cache Key:", cacheKey);
+
+    const cachedData = await redisClient.get(cacheKey);
     if (cachedData) {
+      console.log("🔵 Serving from Cache");
       return res.json(JSON.parse(cachedData));
     }
 
-    // ✅ User fetch karo with populated posts
-    const user = await User.findById(userId).populate("posts").lean().exec();
+    // ✅ User fetch with populated posts
+    const user = await User.findById(userId).populate("posts").lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const responseData = {
@@ -100,7 +84,7 @@ exports.getUserProfile = async (req, res) => {
       username: user.username,
       profilePic: user.profilePic,
       bio: user.bio,
-      posts: user.posts, // ✅ Ab ye properly populated hoga
+      posts: user.posts,
       liked: user.liked,
       stats: {
         posts: user.posts.length,
@@ -109,17 +93,16 @@ exports.getUserProfile = async (req, res) => {
       },
     };
 
-    console.log("sended data:", responseData);
-
     // ✅ Redis me store karo (60 min ke liye)
-    await redisClient.set(`user:${userId}`, JSON.stringify(responseData), 'EX', 3600);
+    await redisClient.set(cacheKey, JSON.stringify(responseData), 'EX', 3600);
 
     res.json(responseData);
   } catch (error) {
-    console.log(error);
+    console.log("❌ Error in getUserProfile:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 
 // ✅ Update User Profile & Invalidate Cache
@@ -232,5 +215,38 @@ exports.deleteUserAccount = async (req, res) => {
   } catch (error) {
     console.error("Delete Account Error:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+
+
+exports.getSpecificUser = async (req, res) => {
+  try {
+    console.log("req.params:", req.params); // Debugging ke liye
+    const userId = req.params.id;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is missing!" });
+    }
+
+    // 🔥 Check if userId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid User ID" });
+    }
+
+    const user = await User.findById(userId)
+      .select("-password -refreshToken") // ✅ refreshToken aur password hata diya
+      .populate("posts"); // ✅ posts populate kiye
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
