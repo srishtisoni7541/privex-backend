@@ -13,10 +13,6 @@ const userSchema = new mongoose.Schema(
    
     profilePic: {
       type: Buffer,
-      // default: Buffer.from(
-      //   "/9j/4AAQSkZJRgABAQEAAAA...", // Base64 encoded image data
-      //   "base64"
-      // ),
     },
     bio: { type: String, trim: true, default: "" },
    

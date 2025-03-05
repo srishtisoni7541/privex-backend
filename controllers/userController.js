@@ -1,5 +1,9 @@
+
+
+
 const User = require("../models/user.model");
 const Post = require("../models/post.model");
+const redisClient = require("../services/redisClient");
 
 // ✅ Follow/Unfollow User
 exports.followUser = async (req, res) => {
@@ -8,38 +12,27 @@ exports.followUser = async (req, res) => {
     const loggedInUserId = req.user.id; // Login User ID
 
     if (userId === loggedInUserId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "You can't follow yourself!" });
+      return res.status(400).json({ success: false, message: "You can't follow yourself!" });
     }
 
     const userToFollow = await User.findById(userId);
     const currentUser = await User.findById(loggedInUserId);
 
-    if (!userToFollow)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found!" });
+    if (!userToFollow) return res.status(404).json({ success: false, message: "User not found!" });
 
     const isFollowing = currentUser.following.includes(userId);
 
     if (isFollowing) {
-      // ✅ Unfollow Logic
-      await User.findByIdAndUpdate(loggedInUserId, {
-        $pull: { following: userId },
-      });
-      await User.findByIdAndUpdate(userId, {
-        $pull: { followers: loggedInUserId },
-      });
+      await User.findByIdAndUpdate(loggedInUserId, { $pull: { following: userId } });
+      await User.findByIdAndUpdate(userId, { $pull: { followers: loggedInUserId } });
+      await redisClient.del(`user:${loggedInUserId}`); // ✅ Cache Invalidation
+      await redisClient.del(`user:${userId}`);
       return res.json({ success: true, message: "User unfollowed!" });
     } else {
-      // ✅ Follow Logic
-      await User.findByIdAndUpdate(loggedInUserId, {
-        $push: { following: userId },
-      });
-      await User.findByIdAndUpdate(userId, {
-        $push: { followers: loggedInUserId },
-      });
+      await User.findByIdAndUpdate(loggedInUserId, { $push: { following: userId } });
+      await User.findByIdAndUpdate(userId, { $push: { followers: loggedInUserId } });
+      await redisClient.del(`user:${loggedInUserId}`); // ✅ Cache Invalidation
+      await redisClient.del(`user:${userId}`);
       return res.json({ success: true, message: "User followed!" });
     }
   } catch (error) {
@@ -48,27 +41,80 @@ exports.followUser = async (req, res) => {
   }
 };
 
-// ✅ Get User Profile
+// // ✅ Get User Profile with Redis Cache
+// exports.getUserProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.userId;
+    
+//     // ✅ Pehle Redis se check karo
+//     const cachedData = await redisClient.get(`user:${userId}`);
+//     if (cachedData) {
+//       return res.json(JSON.parse(cachedData));
+//     }
+
+//     const user = await User.findById(userId).populate("posts");
+//     if (!user) return res.status(404).json({ error: "User not found" });
+
+//     const responseData = {
+//       _id: user._id,
+//       username: user.username,
+//       profilePic: user.profilePic,
+//       bio: user.bio,
+//       posts: user.posts,
+//       liked: user.liked,
+//       stats: {
+//         posts: user.posts.length,
+//         followers: user.followers.length,
+//         following: user.following.length,
+//       },
+//     };
+
+//     console.log("sended data:",responseData);
+//     // ✅ Data Redis me store karo (60 min ke liye)
+//     await redisClient.set(`user:${userId}`, JSON.stringify(responseData),'EX',3600, );
+
+//     res.json(responseData);
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// };
+
+
 exports.getUserProfile = async (req, res) => {
   try {
-    // Assume karo user `req.user.id` se mil raha hai (JWT se)
-    console.log(req.user);
-    const user = await User.findById(req.user.userId).populate("posts");
+    const userId = req.user.userId;
+    
+    // ✅ Pehle Redis se check karo
+    const cachedData = await redisClient.get(`user:${userId}`);
+    if (cachedData) {
+      return res.json(JSON.parse(cachedData));
+    }
+
+    // ✅ User fetch karo with populated posts
+    const user = await User.findById(userId).populate("posts").lean().exec();
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    res.json({
+    const responseData = {
+      _id: user._id,
       username: user.username,
       profilePic: user.profilePic,
       bio: user.bio,
-      posts: user.posts,
+      posts: user.posts, // ✅ Ab ye properly populated hoga
       liked: user.liked,
-      saved: user.saved,
       stats: {
         posts: user.posts.length,
         followers: user.followers.length,
         following: user.following.length,
       },
-    });
+    };
+
+    console.log("sended data:", responseData);
+
+    // ✅ Redis me store karo (60 min ke liye)
+    await redisClient.set(`user:${userId}`, JSON.stringify(responseData), 'EX', 3600);
+
+    res.json(responseData);
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -76,23 +122,23 @@ exports.getUserProfile = async (req, res) => {
 };
 
 
+// ✅ Update User Profile & Invalidate Cache
 exports.updateUserProfile = async (req, res) => {
   try {
     const { username, bio } = req.body;
-    const profilePic =  req.file.buffer; // Image ko buffer me save kar raha ha
+    const profilePic = req.file?.buffer; 
 
     const updatedUser = await User.findByIdAndUpdate(
-      req.user.userId, // ✅ Ensure correct user ID
-      { username, bio, ...(profilePic && { profilePic }) }, // ✅ Profile pic tabhi update hogi agar file mili
+      req.user.userId,
+      { username, bio, ...(profilePic && { profilePic }) },
       { new: true }
     );
-    updatedUser.save();
-    // console.log("Updated User Data:", updatedUser);
-
 
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
+
+    await redisClient.del(`user:${req.user.userId}`); // ✅ Cache Invalidation
 
     return res.json({ success: true, user: updatedUser, message: "Profile updated successfully!" });
   } catch (error) {
@@ -101,12 +147,21 @@ exports.updateUserProfile = async (req, res) => {
   }
 };
 
-
-// ✅ Get User Posts
+// ✅ Get User Posts with Redis Cache
 exports.getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
+
+    // ✅ Check Redis cache
+    const cachedPosts = await redisClient.get(`userPosts:${userId}`);
+    if (cachedPosts) {
+      return res.json({ success: true, posts: JSON.parse(cachedPosts) });
+    }
+
     const posts = await Post.find({ user: userId }).sort({ createdAt: -1 });
+
+    // ✅ Save in cache for 30 mins
+    await redisClient.set(`userPosts:${userId}`, JSON.stringify(posts),'EX', 1800);
 
     res.json({ success: true, posts });
   } catch (error) {
@@ -115,26 +170,35 @@ exports.getUserPosts = async (req, res) => {
   }
 };
 
-
+// ✅ Get All Users with Redis Cache
 exports.getAllUser = async (req, res) => {
-  const allUsers = await User.find();
-  res.json(allUsers);
+  try {
+    const cachedUsers = await redisClient.get("allUsers");
+    if (cachedUsers) {
+      return res.json(JSON.parse(cachedUsers));
+    }
+
+    const allUsers = await User.find();
+    await redisClient.set("allUsers", JSON.stringify(allUsers),'EX', 3600);
+
+    res.json(allUsers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Internal Server Error!" });
+  }
 };
 
+// ✅ Logout User
 exports.logoutUser = async (req, res) => {
   try {
-    // ✅ HTTP-only Cookie se Refresh Token Lo
     const refreshToken = req.cookies.refreshToken;
-
     if (!refreshToken) {
       return res.status(401).json({ message: "Unauthorized: No token found" });
     }
 
-    // ✅ Refresh token blacklist ya invalidate karo (database ya memory me store kar sakte ho)
     global.blacklistedTokens = global.blacklistedTokens || new Set();
     global.blacklistedTokens.add(refreshToken);
 
-    // ✅ Refresh Token ko Clear Karna
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -148,18 +212,21 @@ exports.logoutUser = async (req, res) => {
   }
 };
 
+// ✅ Delete User Account & Invalidate Cache
 exports.deleteUserAccount = async (req, res) => {
   try {
     const { userId } = req.params;
+    await Post.deleteMany({ userId });
 
-    // ✅ Check if user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ Delete user from database
     await User.findByIdAndDelete(userId);
+
+    await redisClient.del(`user:${userId}`); // ✅ Invalidate User Cache
+    await redisClient.del(`userPosts:${userId}`);
 
     return res.status(200).json({ message: "Account deleted successfully" });
   } catch (error) {
