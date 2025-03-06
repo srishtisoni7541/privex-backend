@@ -51,14 +51,14 @@ exports.followUser = async (req, res) => {
 
 exports.getUserProfile = async (req, res) => {
   try {
-    console.log("req.user:", req.user); // ✅ Debugging ke liye
+    
 
     if (!req.user || !req.user.userId) {
       return res.status(401).json({ error: "Unauthorized: User ID missing" });
     }
 
     const userId = req.user.userId;
-    console.log("User ID:", userId);
+    // console.log("User ID:", userId);
 
     // ✅ Ensure valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -67,9 +67,9 @@ exports.getUserProfile = async (req, res) => {
 
     // ✅ Redis Cache Check
     const cacheKey = `user:${userId}`;
-    console.log("Cache Key:", cacheKey);
 
     const cachedData = await redisClient.get(cacheKey);
+    // console.log(cachedData);
     if (cachedData) {
       console.log("🔵 Serving from Cache");
       return res.json(JSON.parse(cachedData));
@@ -170,18 +170,24 @@ exports.getAllUser = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal Server Error!" });
   }
 };
-
 // ✅ Logout User
 exports.logoutUser = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
+    // 🔍 Debugging Logs
+    console.log("👉 Request Params:", req.params);
+    console.log("👉 Cookies:", req.cookies);
+
+    const refreshToken = req.cookies?.refreshToken; // Optional chaining for safety
+
     if (!refreshToken) {
       return res.status(401).json({ message: "Unauthorized: No token found" });
     }
 
+    // Add refresh token to global blacklist
     global.blacklistedTokens = global.blacklistedTokens || new Set();
     global.blacklistedTokens.add(refreshToken);
 
+    // Clear the refreshToken cookie
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -190,10 +196,14 @@ exports.logoutUser = async (req, res) => {
 
     return res.status(200).json({ message: "Logout successful" });
   } catch (error) {
-    console.error("Logout Error:", error);
+    console.error("❌ Logout Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+
+
 
 // ✅ Delete User Account & Invalidate Cache
 exports.deleteUserAccount = async (req, res) => {

@@ -11,7 +11,6 @@ const getAllPosts = async (req, res) => {
     
     //  Redis Check: Cache me data hai kya?
     const cachedData = await redisClient.get(cacheKey);
-    console.log(cachedData);
     if (cachedData) {
       console.log("🔵 Serving from Cache");
       return res.status(200).json({
@@ -49,56 +48,6 @@ const getAllPosts = async (req, res) => {
     });
   }
 };
-
-
-
-// const createPost = async (req, res) => {
-//   try {
-//     const { caption } = req.body;
-
-//     if (!req.file || !caption) {
-//       return res.status(400).json({ message: "Caption and image are required" });
-//     }
-
-//     if (!req.user || !req.user.userId) {
-//       return res.status(401).json({ message: "User authentication failed" });
-//     }
-
-//     // ✅ Cloudinary URL from Multer
-//     const imageUrl = req.file.path;
-
-//     // ✅ Post create
-//     const newPost = new Post({
-//       user: req.user.userId,
-//       image: imageUrl,
-//       caption,
-//     });
-
-//     const savedPost = await newPost.save();
-
-//     // ✅ User model me bhi update karo
-//     const updatedUser = await User.findByIdAndUpdate(
-//       req.user.userId,
-//       { $push: { posts: savedPost._id } },
-//       { new: true } // Yeh ensure karega ki updated user return ho
-//     ).populate("posts"); // Taaki updated posts array mile
-
-//     // ✅ Redis cache update karo
-//     const cacheKey = `userProfile:${req.user.userId}`;
-//     await redisClient.set(cacheKey, JSON.stringify(updatedUser), 'EX', 3600);
-
-
-//     // ✅ Saare posts ka cache bhi delete karo taaki fresh list aaye
-//     await redisClient.del("allPosts");
-
-//     res.status(201).json(savedPost);
-//   } catch (err) {
-//     console.log(err);
-//     res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
-//   }
-// };
-
-
 
 
 
@@ -203,10 +152,9 @@ const deletePost = async (req, res) => {
 
 const likePost = async (req, res) => {
   const { postId } = req.params;
-  let userId = req.body.userId || req.user?._id;
+let userId = req.user.userId;
 
   try {
-    // console.log("Received userId:", userId);
 
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(postId)) {
       return res.status(400).json({ message: "Invalid User ID or Post ID" });
