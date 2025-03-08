@@ -6,7 +6,7 @@ const { validationResult } = require("express-validator");
 const mongoSanitize = require("express-mongo-sanitize");
 const jwt = require('jsonwebtoken');
 
-// ✅ Remove xss-clean and only use mongoSanitize
+//  Remove xss-clean and only use mongoSanitize
 const sanitizeInput = (input) => mongoSanitize.sanitize(input);
 exports.register = async (req, res) => {
   try {
@@ -30,13 +30,13 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // ✅ Create User
+    //  Create User
     const user = await User.create({ username, email, password });
 
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
-  // ✅ Refresh token ko HTTP-only Cookie me Store Kar
+  //  Refresh token ko HTTP-only Cookie me Store Kar
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true, 
     secure: process.env.NODE_ENV === "production", 
@@ -71,12 +71,11 @@ exports.login = async (req, res) => {
 
     let { email, password } = req.body;
 
-    email = sanitizeInput(email); // ✅ Email sanitize karo
+    email = sanitizeInput(email); //  Email sanitize karo
     password = sanitizeInput(password);
 
-    // console.log("User Input:", { email, password });
 
-    // ✅ Ensure password is retrieved from DB
+    // Ensure password is retrieved from DB
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
@@ -94,7 +93,7 @@ exports.login = async (req, res) => {
     const refreshToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 
-     // ✅ Refresh token ko HTTP-only Cookie me Store Kar
+     //  Refresh token ko HTTP-only Cookie me Store Kar
      res.cookie("refreshToken", refreshToken, {
       httpOnly: true, 
       secure: process.env.NODE_ENV === "production", 
