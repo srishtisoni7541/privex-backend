@@ -37,10 +37,10 @@
     max: 300,
     message: "Too many requests from this IP, please try again later.",
   });
-  app.use(limiter);
+ 
 
   // ✅ Routes
-  app.use("/api/auth", require("./routes/authRoutes"));
+  app.use("/api/auth", limiter, require("./routes/authRoutes"));
   app.use('/api/posts',require('./routes/postRoutes'));
   app.use('/api/users',require('./routes/userRoutes'));
 

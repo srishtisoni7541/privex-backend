@@ -61,6 +61,8 @@ exports.register = async (req, res) => {
   }
 };
 
+
+
 exports.login = async (req, res) => {
   try {
     // Validate Input Fields
@@ -71,9 +73,8 @@ exports.login = async (req, res) => {
 
     let { email, password } = req.body;
 
-    email = sanitizeInput(email); //  Email sanitize karo
+    email = sanitizeInput(email); // Email sanitize karo
     password = sanitizeInput(password);
-
 
     // Ensure password is retrieved from DB
     const user = await User.findOne({ email }).select("+password");
@@ -92,15 +93,13 @@ exports.login = async (req, res) => {
     const accessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const refreshToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-
-     //  Refresh token ko HTTP-only Cookie me Store Kar
-     res.cookie("refreshToken", refreshToken, {
+    // Refresh token ko HTTP-only Cookie me Store Karo
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true, 
       secure: process.env.NODE_ENV === "production", 
       sameSite: "Strict", 
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
-
 
     // Generate OTP (6-digit)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -110,16 +109,81 @@ exports.login = async (req, res) => {
     // Send OTP to email
     await sendOTP(email, otp);
 
+    //  Password, Email, RefreshToken Remove from Response**
+    const { password: _, email: __, refreshToken:___, ...safeUserData } = user.toObject();
+
     res.status(200).json({ 
       message: "OTP sent to your email", 
       accessToken, 
-      user 
+      user: safeUserData 
     });
+
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+// exports.login = async (req, res) => {
+//   try {
+//     // Validate Input Fields
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({ success: false, errors: errors.array() });
+//     }
+
+//     let { email, password } = req.body;
+
+//     email = sanitizeInput(email); //  Email sanitize karo
+//     password = sanitizeInput(password);
+
+
+//     // Ensure password is retrieved from DB
+//     const user = await User.findOne({ email }).select("+password");
+
+//     if (!user) {
+//       return res.status(400).json({ message: "Invalid email or password" });
+//     }
+
+//     // Verify Password
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//       return res.status(400).json({ message: "Invalid email or password" });
+//     }
+
+//     // Generate Access Token and Refresh Token
+//     const accessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+//     const refreshToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+
+//      //  Refresh token ko HTTP-only Cookie me Store Kar
+//      res.cookie("refreshToken", refreshToken, {
+//       httpOnly: true, 
+//       secure: process.env.NODE_ENV === "production", 
+//       sameSite: "Strict", 
+//       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+//     });
+
+
+//     // Generate OTP (6-digit)
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+//     user.otp = otp;
+//     await user.save();
+
+//     // Send OTP to email
+//     await sendOTP(email, otp);
+
+//     res.status(200).json({ 
+//       message: "OTP sent to your email", 
+//       accessToken, 
+//       user 
+//     });
+//   } catch (error) {
+//     console.error("Login Error:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 
 
 exports.verifyOTP = async (req, res) => {

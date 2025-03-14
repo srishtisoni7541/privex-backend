@@ -247,7 +247,7 @@ exports.deleteUserAccount = async (req, res) => {
   }
 };
 
-exports.getAllUser = async (req, res) => {
+exports.getAllUsers = async (req, res) => {
   try {
     const cachedUsers = await redisClient.get("allUsers");
     if (cachedUsers) {
