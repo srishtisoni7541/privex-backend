@@ -49,6 +49,62 @@ const getAllPosts = async (req, res) => {
   }
 };
 
+// const createPost = async (req, res) => {
+//   try {
+//     const { caption } = req.body;
+
+//     if (!req.file || !caption) {
+//       return res
+//         .status(400)
+//         .json({ message: "Caption and image are required" });
+//     }
+
+//     if (!req.user || !req.user.userId) {
+//       return res.status(401).json({ message: "User authentication failed" });
+//     }
+
+//     // Cloudinary URL from Multer
+//     const imageUrl = req.file.path;
+
+//     // Post create
+//     const newPost = new Post({
+//       user: req.user.userId,
+//       image: imageUrl,
+//       caption,
+//     });
+
+//     const savedPost = await newPost.save();
+
+//     // User model update
+//     await User.findByIdAndUpdate(
+//       req.user.userId,
+//       { $push: { posts: savedPost._id } },
+//       { new: true }
+//     );
+
+//     // Redis cache DELETE 
+//     const cacheKey = `user:${req.user.userId}`;
+//     await redisClient.del(cacheKey);
+
+    
+//     await redisClient.del("allPosts");
+
+//     res.status(201).json(savedPost);
+//   } catch (err) {
+//     console.log(" Error in createPost:", err);
+//     res
+//       .status(500)
+//       .json({
+//         success: false,
+//         message: err.message || "Internal Server Error",
+//       });
+//   }
+// };
+
+
+
+
+
 const createPost = async (req, res) => {
   try {
     const { caption } = req.body;
@@ -82,22 +138,17 @@ const createPost = async (req, res) => {
       { new: true }
     );
 
-    // Redis cache DELETE 
-    const cacheKey = `user:${req.user.userId}`;
-    await redisClient.del(cacheKey);
-
-    
-    await redisClient.del("allPosts");
-
+    //  Redis Cache DELETE  
+    await redisClient.del(`user:${req.user.userId}`);  
+    await redisClient.del(`userPosts:${req.user.userId}`); 
+    await redisClient.del("allPosts");  
     res.status(201).json(savedPost);
   } catch (err) {
-    console.log(" Error in createPost:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: err.message || "Internal Server Error",
-      });
+    console.log("Error in createPost:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || "Internal Server Error",
+    });
   }
 };
 
@@ -122,9 +173,39 @@ const updatePost = async (req, res) => {
 
 
 
+// const deletePost = async (req, res) => {
+//   try {
+//     const { postId } = req.params; 
+
+//     if (!postId) {
+//       return res.status(400).json({ message: "Post ID not provided" });
+//     }
+
+//     const post = await Post.findById(postId);
+//     if (!post) {
+//       return res.status(404).json({ message: "Post not found" });
+//     }
+
+
+//     await User.findByIdAndUpdate(post.user, { $pull: { posts: postId } });
+
+//     await Post.findByIdAndDelete(postId);
+
+//     // Delete from Redis as well
+//     const cacheKey = `post:${postId}`;
+//     await redisClient.del(cacheKey);
+
+//     res.status(200).json({ message: "Post deleted successfully" });
+//   } catch (err) {
+//     console.error("Error in deletePost:", err);
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 const deletePost = async (req, res) => {
   try {
-    const { postId } = req.params; 
+    const { postId } = req.params;
 
     if (!postId) {
       return res.status(400).json({ message: "Post ID not provided" });
@@ -135,22 +216,32 @@ const deletePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    const userId = post.user; // Post jis user ne banayi hai
 
-    await User.findByIdAndUpdate(post.user, { $pull: { posts: postId } });
+    // Remove post reference from User model
+    await User.findByIdAndUpdate(userId, { $pull: { posts: postId } });
 
+    // Delete post from DB
     await Post.findByIdAndDelete(postId);
 
-    // Delete from Redis as well
-    const cacheKey = `post:${postId}`;
-    await redisClient.del(cacheKey);
+    // Remove Post Cache
+    await redisClient.del(`post:${postId}`);
 
-    res.status(200).json({ message: "Post deleted successfully" });
+    //  Remove All Posts Cache
+    await redisClient.del("allPosts");
+
+    //  Remove User Profile Cache
+    await redisClient.del(`user:${userId}`);
+
+    //  Remove User Posts Cache
+    await redisClient.del(`userPosts:${userId}`);
+
+    return res.status(200).json({ message: "Post deleted successfully" });
   } catch (err) {
     console.error("Error in deletePost:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
-
 
 
 
@@ -217,7 +308,7 @@ const getAllLikes = async (req, res) => {
     // Find the post and populate the likes with more user details
     const post = await Post.findById(postId).populate(
       "likes",
-      "username profilePic " // Add extra fields if needed
+      "username profilePic " 
     );
 
     if (!post) {
@@ -226,7 +317,7 @@ const getAllLikes = async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
-    // Returning a structured response
+   
     res.status(200).json({
       success: true,
       likesCount: post.likes.length,
