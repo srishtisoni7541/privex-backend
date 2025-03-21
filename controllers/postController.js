@@ -162,6 +162,63 @@ const deletePost = async (req, res) => {
 
 
 
+// const likePost = async (req, res) => {
+//   const { postId } = req.params;
+//   let userId = req.user.userId;
+
+//   try {
+//     if (
+//       !mongoose.Types.ObjectId.isValid(userId) ||
+//       !mongoose.Types.ObjectId.isValid(postId)
+//     ) {
+//       return res.status(400).json({ message: "Invalid User ID or Post ID" });
+//     }
+
+//     userId = new mongoose.Types.ObjectId(userId);
+
+//     const currentUser = await User.findById(userId).select(
+//       "username profilePic"
+//     );
+//     if (!currentUser)
+//       return res.status(404).json({ message: "User not found" });
+
+//     const post = await Post.findById(postId);
+//     if (!post) return res.status(404).json({ message: "Post not found" });
+
+//     // Check if user already liked the post
+//     const alreadyLiked = post.likes.some(
+//       (like) => like._id.toString() === userId.toString()
+//     );
+
+//     if (alreadyLiked) {
+//       // Galti se pura array clear na ho jaye, sirf ek user ka like remove karo
+//       post.likes = post.likes.filter(
+//         (like) => like._id.toString() !== userId.toString()
+//       );
+//     } else {
+//       //  Naya like add karo bina purane likes delete kiye
+//       post.likes.push({
+//         _id: userId,
+//         username: currentUser.username,
+//         profilePic: currentUser.profilePic,
+//       });
+//     }
+
+//     await post.save();
+
+//     res.json({
+//       message: alreadyLiked ? "Post unliked" : "Post liked",
+//       likes: post.likes,
+//     });
+//   } catch (error) {
+//     console.error("Error liking post:", error);
+//     res.status(500).json({ message: "Internal server error", error });
+//   }
+// };
+
+
+
+
 const likePost = async (req, res) => {
   const { postId } = req.params;
   let userId = req.user.userId;
@@ -177,7 +234,7 @@ const likePost = async (req, res) => {
     userId = new mongoose.Types.ObjectId(userId);
 
     const currentUser = await User.findById(userId).select(
-      "username profilePic"
+      "username profilePic likedPosts"
     );
     if (!currentUser)
       return res.status(404).json({ message: "User not found" });
@@ -185,36 +242,48 @@ const likePost = async (req, res) => {
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // Check if user already liked the post
+    // **Check if already liked**
     const alreadyLiked = post.likes.some(
       (like) => like._id.toString() === userId.toString()
     );
 
     if (alreadyLiked) {
-      // Galti se pura array clear na ho jaye, sirf ek user ka like remove karo
+      // ✅ **Unlike Post**
       post.likes = post.likes.filter(
         (like) => like._id.toString() !== userId.toString()
       );
+
+      // **User ke likedPosts se bhi hatao**
+      currentUser.likedPosts = currentUser.likedPosts.filter(
+        (id) => id.toString() !== postId.toString()
+      );
     } else {
-      //  Naya like add karo bina purane likes delete kiye
+      // ✅ **Like Post**
       post.likes.push({
         _id: userId,
         username: currentUser.username,
         profilePic: currentUser.profilePic,
       });
+
+      // **User ke likedPosts me post ki ID add karo**
+      currentUser.likedPosts.push(postId);
     }
 
+    // ✅ **Save both Post & User**
     await post.save();
+    await currentUser.save();
 
     res.json({
       message: alreadyLiked ? "Post unliked" : "Post liked",
       likes: post.likes,
+      likedPosts: currentUser.likedPosts, // Return updated liked posts
     });
   } catch (error) {
     console.error("Error liking post:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
 const getAllLikes = async (req, res) => {
   const { postId } = req.params;

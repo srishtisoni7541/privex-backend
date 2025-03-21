@@ -28,7 +28,7 @@ exports.getUserProfile = async (req, res) => {
     }
 
     //  User fetch with populated posts
-    const user = await User.findById(userId).populate("posts").lean();
+    const user = await User.findById(userId).populate("posts").populate("likedPosts") .lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const responseData = {
@@ -38,6 +38,7 @@ exports.getUserProfile = async (req, res) => {
       bio: user.bio,
       posts: user.posts,
       liked: user.liked,
+      likedPosts: user.likedPosts,
       stats: {
         posts: user.posts.length,
         followers: user.followers.length,
@@ -45,7 +46,7 @@ exports.getUserProfile = async (req, res) => {
       },
     };
 
-    //  Redis me store karo (60 min ke liye)
+    // store data in redis for 1 hr.
     await redisClient.set(cacheKey, JSON.stringify(responseData), "EX", 3600);
 
     res.json(responseData);
