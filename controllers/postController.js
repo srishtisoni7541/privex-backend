@@ -49,61 +49,6 @@ const getAllPosts = async (req, res) => {
   }
 };
 
-// const createPost = async (req, res) => {
-//   try {
-//     const { caption } = req.body;
-
-//     if (!req.file || !caption) {
-//       return res
-//         .status(400)
-//         .json({ message: "Caption and image are required" });
-//     }
-
-//     if (!req.user || !req.user.userId) {
-//       return res.status(401).json({ message: "User authentication failed" });
-//     }
-
-//     // Cloudinary URL from Multer
-//     const imageUrl = req.file.path;
-
-//     // Post create
-//     const newPost = new Post({
-//       user: req.user.userId,
-//       image: imageUrl,
-//       caption,
-//     });
-
-//     const savedPost = await newPost.save();
-
-//     // User model update
-//     await User.findByIdAndUpdate(
-//       req.user.userId,
-//       { $push: { posts: savedPost._id } },
-//       { new: true }
-//     );
-
-//     // Redis cache DELETE 
-//     const cacheKey = `user:${req.user.userId}`;
-//     await redisClient.del(cacheKey);
-
-    
-//     await redisClient.del("allPosts");
-
-//     res.status(201).json(savedPost);
-//   } catch (err) {
-//     console.log(" Error in createPost:", err);
-//     res
-//       .status(500)
-//       .json({
-//         success: false,
-//         message: err.message || "Internal Server Error",
-//       });
-//   }
-// };
-
-
-
-
 
 const createPost = async (req, res) => {
   try {
