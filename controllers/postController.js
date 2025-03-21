@@ -9,7 +9,7 @@ const getAllPosts = async (req, res) => {
   try {
     const cacheKey = "allPosts";
 
-    //  Redis Check: Cache me data hai kya?
+    //  Redis Check: Cache me data hai kya
     const cachedData = await redisClient.get(cacheKey);
     if (cachedData) {
       console.log("🔵 Serving from Cache");
@@ -116,36 +116,6 @@ const updatePost = async (req, res) => {
   }
 };
 
-
-
-// const deletePost = async (req, res) => {
-//   try {
-//     const { postId } = req.params; 
-
-//     if (!postId) {
-//       return res.status(400).json({ message: "Post ID not provided" });
-//     }
-
-//     const post = await Post.findById(postId);
-//     if (!post) {
-//       return res.status(404).json({ message: "Post not found" });
-//     }
-
-
-//     await User.findByIdAndUpdate(post.user, { $pull: { posts: postId } });
-
-//     await Post.findByIdAndDelete(postId);
-
-//     // Delete from Redis as well
-//     const cacheKey = `post:${postId}`;
-//     await redisClient.del(cacheKey);
-
-//     res.status(200).json({ message: "Post deleted successfully" });
-//   } catch (err) {
-//     console.error("Error in deletePost:", err);
-//     res.status(500).json({ message: err.message });
-//   }
-// };
 
 
 const deletePost = async (req, res) => {

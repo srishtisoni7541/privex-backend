@@ -141,9 +141,8 @@ exports.getSpecificUser = async (req, res) => {
 exports.followUser = async (req, res) => {
   try {
     const { userId } = req.params; // Jisko follow karna hai
-    console.log("userId:", userId);
+    // console.log("userId:", userId);
     const loggedInUserId = req.user.userId; // Login User ID
-    console.log("logged In user:", loggedInUserId);
 
     if (userId === loggedInUserId) {
       return res
