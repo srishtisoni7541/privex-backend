@@ -82,11 +82,11 @@ const createPost = async (req, res) => {
       { new: true }
     );
 
-    // Redis cache DELETE karo taaki next time fresh data aaye
+    // Redis cache DELETE 
     const cacheKey = `user:${req.user.userId}`;
     await redisClient.del(cacheKey);
 
-    // Saare posts ka cache bhi delete karo taaki fresh list aaye
+    
     await redisClient.del("allPosts");
 
     res.status(201).json(savedPost);
@@ -120,23 +120,27 @@ const updatePost = async (req, res) => {
   }
 };
 
+
+
 const deletePost = async (req, res) => {
   try {
-    console.log("Request Params:", req.params);
-    const { postId } = req.params; // Fix: `postId` lo, `id` nahi
+    const { postId } = req.params; 
 
-    // console.log("Received Post ID for deletion:", postId);
-
-    if (!postId)
+    if (!postId) {
       return res.status(400).json({ message: "Post ID not provided" });
+    }
 
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
-    // Post delete from MongoDB
+
+    await User.findByIdAndUpdate(post.user, { $pull: { posts: postId } });
+
     await Post.findByIdAndDelete(postId);
 
-    // Redis se bhi delete karo
+    // Delete from Redis as well
     const cacheKey = `post:${postId}`;
     await redisClient.del(cacheKey);
 
@@ -146,6 +150,11 @@ const deletePost = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
+
+
 
 const likePost = async (req, res) => {
   const { postId } = req.params;
