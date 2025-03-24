@@ -9,6 +9,7 @@ const {
   getAllLikes,
   getPost,
   likePost,
+  SavedPost,
 } = require("../controllers/postController");
 const isLoggedIn = require("../middlewares/authMiddleware");
 
@@ -21,7 +22,6 @@ router.get("/post/:postId", getPost); // Get a single post by ID
 router.get("/allLikes/:postId", getAllLikes); // Get likes for a post
 
 //  🔒 PROTECTED ROUTES (Require Login)
-// router.post("/create", isLoggedIn, upload.single("image"), createPost); 
 router.post("/create", isLoggedIn, upload.single("image"), (req, res, next) => {
     next();
   }, createPost);
@@ -29,5 +29,6 @@ router.post("/create", isLoggedIn, upload.single("image"), (req, res, next) => {
 router.post("/like/:postId", isLoggedIn, likePost); // Like a Post
 router.put("/update/:postId", isLoggedIn, updatePost); // Update a Post
 router.delete("/delete/:postId", isLoggedIn, deletePost); // Delete a Post
+router.post('/save/:postId',isLoggedIn,SavedPost);
 
 module.exports = router;

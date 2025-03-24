@@ -161,63 +161,51 @@ const deletePost = async (req, res) => {
   }
 };
 
+const SavedPost = async (req, res) => {
+  try {
+      const { postId } = req.params; 
+      const userId = req.user.userId; 
+      console.log(req.body);
+
+      console.log("postId type:", typeof postId, "Value:", postId);
+
+      if (!postId || typeof postId !== "string") {
+          return res.status(400).json({ message: "Invalid postId format!" });
+      }
+
+      const post = await Post.findById(postId);
+      console.log("Post found:", post);
+
+      if (!post) {
+          return res.status(404).json({ message: "Post not found!" });
+      }
+
+      if (post.user.toString() === userId) {
+          return res.status(400).json({ message: "You cannot save your own post!" });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+          return res.status(404).json({ message: "User not found!" });
+      }
+
+      if (user.savedPosts.includes(postId)) {
+          return res.status(400).json({ message: "Post already saved!" });
+      }
+
+      user.savedPosts.push(postId);
+      await user.save();
+
+      return res.status(200).json({ message: "Post saved successfully!" });
+
+  } catch (error) {
+      console.error("Error in SavedPost:", error);
+      return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 
 
-
-// const likePost = async (req, res) => {
-//   const { postId } = req.params;
-//   let userId = req.user.userId;
-
-//   try {
-//     if (
-//       !mongoose.Types.ObjectId.isValid(userId) ||
-//       !mongoose.Types.ObjectId.isValid(postId)
-//     ) {
-//       return res.status(400).json({ message: "Invalid User ID or Post ID" });
-//     }
-
-//     userId = new mongoose.Types.ObjectId(userId);
-
-//     const currentUser = await User.findById(userId).select(
-//       "username profilePic"
-//     );
-//     if (!currentUser)
-//       return res.status(404).json({ message: "User not found" });
-
-//     const post = await Post.findById(postId);
-//     if (!post) return res.status(404).json({ message: "Post not found" });
-
-//     // Check if user already liked the post
-//     const alreadyLiked = post.likes.some(
-//       (like) => like._id.toString() === userId.toString()
-//     );
-
-//     if (alreadyLiked) {
-//       // Galti se pura array clear na ho jaye, sirf ek user ka like remove karo
-//       post.likes = post.likes.filter(
-//         (like) => like._id.toString() !== userId.toString()
-//       );
-//     } else {
-//       //  Naya like add karo bina purane likes delete kiye
-//       post.likes.push({
-//         _id: userId,
-//         username: currentUser.username,
-//         profilePic: currentUser.profilePic,
-//       });
-//     }
-
-//     await post.save();
-
-//     res.json({
-//       message: alreadyLiked ? "Post unliked" : "Post liked",
-//       likes: post.likes,
-//     });
-//   } catch (error) {
-//     console.error("Error liking post:", error);
-//     res.status(500).json({ message: "Internal server error", error });
-//   }
-// };
 
 
 
@@ -364,4 +352,5 @@ module.exports = {
   likePost,
   getAllLikes,
   getPost,
+  SavedPost
 };

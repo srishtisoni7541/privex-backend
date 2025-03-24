@@ -2,6 +2,7 @@ const User = require("../models/user.model");
 const Post = require("../models/post.model");
 const redisClient = require("../services/redisClient");
 const mongoose = require("mongoose");
+const { SavedPost } = require("./postController");
 
 exports.getUserProfile = async (req, res) => {
   try {
@@ -31,6 +32,22 @@ exports.getUserProfile = async (req, res) => {
     const user = await User.findById(userId).populate("posts").populate("likedPosts") .lean();
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // const responseData = {
+    //   _id: user._id,
+    //   username: user.username,
+    //   profilePic: user.profilePic,
+    //   bio: user.bio,
+    //   posts: user.posts,
+    //   liked: user.liked,
+    //   likedPosts: user.likedPosts,
+    //   savedPosts:user.savedPosts,
+    //   stats: {
+    //     posts: user.posts.length,
+    //     followers: user.followers.length,
+    //     following: user.following.length,
+    //   },
+    // };
+
     const responseData = {
       _id: user._id,
       username: user.username,
@@ -39,12 +56,14 @@ exports.getUserProfile = async (req, res) => {
       posts: user.posts,
       liked: user.liked,
       likedPosts: user.likedPosts,
+      savedPosts: await User.findById(user._id).populate("savedPosts").then(user => user.savedPosts),  // ✅ Populate saved posts
       stats: {
-        posts: user.posts.length,
-        followers: user.followers.length,
-        following: user.following.length,
+          posts: user.posts.length,
+          followers: user.followers.length,
+          following: user.following.length,
       },
-    };
+  };
+  
 
     // store data in redis for 1 hr.
     await redisClient.set(cacheKey, JSON.stringify(responseData), "EX", 3600);
