@@ -53,6 +53,9 @@ const getAllPosts = async (req, res) => {
 const createPost = async (req, res) => {
   try {
     const { caption } = req.body;
+    if (!caption || caption.length > 300) {
+      return res.status(400).json({ message: "Caption cannot exceed 300 characters!" });
+    }
 
     if (!req.file || !caption) {
       return res

@@ -4,7 +4,7 @@ const postSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Post Owner
     image: { type: String, required: true }, // ✅ Image should be String (URL)
-    caption: { type: String, maxlength: 500 }, // Caption
+    caption: { type: String, maxlength:300 }, // Caption
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Liked Users
     likeCount: { type: Number, default: 0 }, // Default like count 0
     comments: [
